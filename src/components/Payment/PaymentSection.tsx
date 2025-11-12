@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, KeyboardEvent } from "react";
 import { Elements } from "@stripe/react-stripe-js";
 import { loadStripe } from "@stripe/stripe-js";
 import ApplePayButton from "./ApplePayButton";
@@ -24,20 +24,54 @@ export default function PaymentSection({
   useEffect(() => {
     if (!onClose) return;
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") onClose();
+      if ((e as KeyboardEvent).key === "Escape") onClose();
     };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
+    window.addEventListener("keydown", onKey as any);
+    return () => window.removeEventListener("keydown", onKey as any);
   }, [onClose]);
+
+  const apiPost = async (body: Record<string, unknown>) => {
+    const res = await fetch("/api/payment", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+    if (!res.ok) {
+      const text = await res.text().catch(() => "");
+      throw new Error(`Server error: ${res.status} ${text}`);
+    }
+    return res.json();
+  };
 
   const handleStripeCheckout = async () => {
     setLoading(true);
     try {
-      const res = await fetch("/api/checkout", { method: "POST" });
-      const data = await res.json();
-      if (data.url) window.location.href = data.url;
-    } catch (error) {
-      console.error("Stripe checkout error:", error);
+      const data = await apiPost({ type: "checkout" });
+      if (data?.url) {
+        window.location.href = data.url;
+      } else {
+        console.error("No redirect URL from server:", data);
+      }
+    } catch (err) {
+      console.error("Stripe checkout error:", err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleWallet = async (wallet: "apple" | "google") => {
+    setLoading(true);
+    try {
+      const data = await apiPost({ type: "wallet", wallet });
+      if (data?.url) {
+        // server may return a URL to redirect to or a client intent token
+        window.location.href = data.url;
+      } else {
+        // if the wallet component handles the next step (e.g. PaymentRequest), you can call onSuccess here
+        if (onSuccess) onSuccess();
+      }
+    } catch (err) {
+      console.error(`${wallet} pay error:`, err);
     } finally {
       setLoading(false);
     }
@@ -47,43 +81,47 @@ export default function PaymentSection({
     "w-full h-14 rounded-xl flex items-center justify-center gap-3 shadow-sm hover:shadow-md transition-all duration-[var(--duration-medium)] ease-[var(--ease-golden)] cursor-pointer";
 
   const buttonClass =
-    "w-full h-14 rounded-xl flex items-center justify-center gap-3 shadow-sm " +
-    "bg-[#e5e5e5] text-black font-medium transition-colors duration-[var(--duration-medium)] " +
-    "ease-[var(--ease-golden)] hover:bg-gray-300 " +
-    "relative z-10 cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed overflow-hidden";
+    "w-full h-14 rounded-xl flex items-center justify-center gap-3 bg-[#e5e5e5] text-black font-medium transition-colors duration-[var(--duration-medium)] ease-[var(--ease-golden)] hover:bg-gray-300 relative z-10 cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed overflow-hidden";
+
+  const renderClickable = (
+    children: React.ReactNode,
+    onClick: () => void,
+    ariaLabel?: string
+  ) => (
+    <div
+      className={buttonWrapClass}
+      role="button"
+      tabIndex={0}
+      aria-label={ariaLabel}
+      onClick={(e) => {
+        e.preventDefault();
+        if (!loading) onClick();
+      }}
+      onKeyDown={(e) => {
+        if ((e.key === "Enter" || e.key === " ") && !loading) {
+          e.preventDefault();
+          onClick();
+        }
+      }}
+    >
+      <div className={buttonClass + (loading ? " pointer-events-none" : "")}>
+        {children}
+      </div>
+    </div>
+  );
 
   const content = (
     <section className="flex flex-col items-center w-full mt-2">
-      <div className="flex flex-col w-full gap-(--space-1)">
+      <div className="flex flex-col w-full gap-2">
         <Elements stripe={stripePromise}>
-          <div className={buttonWrapClass}>
-            <div className={buttonClass}>
-              <ApplePayButton />
-            </div>
-          </div>
+          {renderClickable(<ApplePayButton />, () => handleWallet("apple"), "Apple Pay")}
+          {renderClickable(<GooglePayButton />, () => handleWallet("google"), "Google Pay")}
+          {renderClickable(<PayPalButton />, () => {
+            // If PayPal needs server kickoff change body accordingly
+            window.location.href = "/api/payment?type=paypal";
+          }, "PayPal")}
+          {renderClickable(<StripePayButton />, handleStripeCheckout, "Card / Stripe Checkout")}
         </Elements>
-
-        <Elements stripe={stripePromise}>
-          <div className={buttonWrapClass}>
-            <div className={buttonClass}>
-              {/* remove invalid props here */}
-              <GooglePayButton />
-            </div>
-          </div>
-        </Elements>
-
-        <div className={buttonWrapClass}>
-          <div className={buttonClass}>
-            <PayPalButton />
-          </div>
-        </div>
-
-        <div className={buttonWrapClass}>
-          <div className={buttonClass}>
-            {/* remove invalid props here too */}
-            <StripePayButton />
-          </div>
-        </div>
       </div>
     </section>
   );
