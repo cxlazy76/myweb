@@ -54,7 +54,6 @@ export default function PaymentSection({
 
   const content = (
     <section className="flex flex-col items-center w-full mt-2">
-
       <div className="flex flex-col w-full gap-(--space-1)">
         <Elements stripe={stripePromise}>
           <div className={buttonWrapClass}>
@@ -67,10 +66,8 @@ export default function PaymentSection({
         <Elements stripe={stripePromise}>
           <div className={buttonWrapClass}>
             <div className={buttonClass}>
-              <GooglePayButton
-                onClick={handleStripeCheckout}
-                disabled={loading}
-              />
+              {/* remove invalid props here */}
+              <GooglePayButton />
             </div>
           </div>
         </Elements>
@@ -83,10 +80,8 @@ export default function PaymentSection({
 
         <div className={buttonWrapClass}>
           <div className={buttonClass}>
-            <StripePayButton
-              onClick={handleStripeCheckout}
-              disabled={loading}
-            />
+            {/* remove invalid props here too */}
+            <StripePayButton />
           </div>
         </div>
       </div>
