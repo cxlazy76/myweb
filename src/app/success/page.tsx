@@ -3,7 +3,7 @@
 import { useSearchParams } from "next/navigation";
 import { useEffect, useState } from "react";
 
-export default function SuccessPage() {
+export default function SuccessContent() {
   const [status, setStatus] = useState("Loading...");
   const params = useSearchParams();
   const sessionId = params.get("session_id");
@@ -12,7 +12,13 @@ export default function SuccessPage() {
     if (!sessionId) return;
     fetch(`/api/checkout/${sessionId}`)
       .then((r) => r.json())
-      .then((d) => setStatus(d.payment_status === "paid" ? "Payment Successful 🎉" : "Payment pending or failed."))
+      .then((d) =>
+        setStatus(
+          d.payment_status === "paid"
+            ? "Payment Successful 🎉"
+            : "Payment pending or failed."
+        )
+      )
       .catch(() => setStatus("Unable to verify payment."));
   }, [sessionId]);
 
